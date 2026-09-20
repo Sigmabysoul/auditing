@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { db } from '../db/db';
 import { triggerHaptic } from '../utils/imageUtils';
+import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 
 interface WarehouseManagementModalProps {
   warehouses: Warehouse[];
@@ -32,6 +33,7 @@ export const WarehouseManagementModal: React.FC<WarehouseManagementModalProps> =
   const [code, setCode] = useState('');
   const [description, setDescription] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [deletingWarehouse, setDeletingWarehouse] = useState<Warehouse | null>(null);
 
   const resetForm = () => {
     setName('');
@@ -90,28 +92,26 @@ export const WarehouseManagementModal: React.FC<WarehouseManagementModalProps> =
     }
   };
 
-  const handleDeleteWarehouse = async (wh: Warehouse) => {
+  const executeDeleteWarehouse = async (wh: Warehouse) => {
+    await db.transaction('rw', db.warehouses, db.warehouseStocks, async () => {
+      await db.warehouses.delete(wh.id);
+      const stocksToDelete = await db.warehouseStocks.where('warehouseId').equals(wh.id).toArray();
+      for (const s of stocksToDelete) {
+        await db.warehouseStocks.delete(s.id);
+      }
+    });
+    triggerHaptic('light');
+    setDeletingWarehouse(null);
+    onRefresh();
+  };
+
+  const handleDeleteWarehouse = (wh: Warehouse) => {
     if (warehouses.length <= 1) {
       alert('You must keep at least one warehouse.');
       return;
     }
-
     triggerHaptic('warning');
-    if (
-      window.confirm(
-        `Are you sure you want to delete "${wh.name}"? All associated stock counts in this warehouse will be removed.`
-      )
-    ) {
-      await db.transaction('rw', db.warehouses, db.warehouseStocks, async () => {
-        await db.warehouses.delete(wh.id);
-        const stocksToDelete = await db.warehouseStocks.where('warehouseId').equals(wh.id).toArray();
-        for (const s of stocksToDelete) {
-          await db.warehouseStocks.delete(s.id);
-        }
-      });
-      triggerHaptic('light');
-      onRefresh();
-    }
+    setDeletingWarehouse(wh);
   };
 
   return (
@@ -272,16 +272,28 @@ export const WarehouseManagementModal: React.FC<WarehouseManagementModalProps> =
           </div>
         </div>
 
-        <div className="px-4 py-3 bg-slate-950/80 border-t border-slate-800 flex justify-end safe-bottom">
+        <div className="px-4 py-3 bg-slate-950/80 light:bg-slate-100 border-t border-slate-800 light:border-slate-200 flex justify-end safe-bottom">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold"
+            className="px-4 py-2 rounded-xl bg-slate-800 light:bg-slate-250 hover:bg-slate-700 light:hover:bg-slate-300 text-white light:text-slate-900 text-xs font-semibold"
           >
             Done
           </button>
         </div>
       </div>
+
+      {deletingWarehouse && (
+        <DeleteConfirmationModal
+          isOpen={!!deletingWarehouse}
+          title="Delete Stockroom"
+          itemName={deletingWarehouse.name}
+          itemType="stockroom"
+          isDangerous={true}
+          onConfirm={() => executeDeleteWarehouse(deletingWarehouse)}
+          onClose={() => setDeletingWarehouse(null)}
+        />
+      )}
     </div>
   );
 };

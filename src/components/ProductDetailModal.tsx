@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { ProductWithAggregateStock, Category, Warehouse, WarehouseStock } from '../types';
 import {
   X,
@@ -11,6 +11,7 @@ import {
   Info
 } from 'lucide-react';
 import { getProductPlaceholderSvg, triggerHaptic } from '../utils/imageUtils';
+import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 
 interface ProductDetailModalProps {
   product: ProductWithAggregateStock;
@@ -31,6 +32,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   onDeleteProduct,
   onSelectWarehouseForAudit,
 }) => {
+  const [isDeleting, setIsDeleting] = useState(false);
   const imageSrc = product.image || getProductPlaceholderSvg(product.name, category?.color || '#3b82f6');
 
   // Map stocks by warehouseId for quick lookup
@@ -60,18 +62,18 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
       <div className="absolute inset-0" onClick={onClose} />
 
       {/* Modal / Drawer Sheet */}
-      <div className="relative z-10 w-full max-w-lg mx-auto bg-slate-900 border-t border-slate-700/80 rounded-t-3xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-200">
+      <div className="relative z-10 w-full max-w-lg mx-auto bg-slate-900 light:bg-white border-t border-slate-700/80 light:border-slate-200 rounded-t-3xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-200">
         {/* Handle Bar */}
-        <div className="w-12 h-1.5 bg-slate-700 rounded-full mx-auto my-2.5 flex-shrink-0" />
+        <div className="w-12 h-1.5 bg-slate-700 light:bg-slate-300 rounded-full mx-auto my-2.5 flex-shrink-0" />
 
         {/* Header Bar */}
-        <div className="px-4 py-2 flex items-center justify-between border-b border-slate-800">
+        <div className="px-4 py-2 flex items-center justify-between border-b border-slate-800 light:border-slate-200">
           <div className="flex items-center gap-2">
             <span
               className="w-2.5 h-2.5 rounded-full"
               style={{ backgroundColor: category?.color || '#3b82f6' }}
             />
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 light:text-slate-600">
               {category?.name || 'Uncategorized'}
             </span>
           </div>
@@ -83,7 +85,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 triggerHaptic('light');
                 onEditProduct(product);
               }}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 transition"
+              className="p-2 rounded-xl text-slate-400 hover:text-white light:hover:text-slate-900 hover:bg-slate-800 light:hover:bg-slate-100 active:scale-95 transition"
               title="Edit Product"
             >
               <Edit2 className="w-4 h-4" />
@@ -92,12 +94,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               type="button"
               onClick={() => {
                 triggerHaptic('warning');
-                if (window.confirm(`Delete "${product.name}" and all its warehouse records?`)) {
-                  onDeleteProduct(product.id);
-                  onClose();
-                }
+                setIsDeleting(true);
               }}
-              className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-slate-800 active:scale-95 transition"
+              className="p-2 rounded-xl text-slate-400 hover:text-rose-400 light:hover:text-rose-600 hover:bg-slate-800 light:hover:bg-slate-100 active:scale-95 transition"
               title="Delete Product"
             >
               <Trash2 className="w-4 h-4" />
@@ -108,7 +107,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 triggerHaptic('light');
                 onClose();
               }}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 transition"
+              className="p-2 rounded-xl text-slate-400 hover:text-white light:hover:text-slate-900 hover:bg-slate-800 light:hover:bg-slate-100 active:scale-95 transition"
             >
               <X className="w-5 h-5" />
             </button>
@@ -118,8 +117,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
           {/* Hero Banner: Image & Product Details */}
-          <div className="flex items-start gap-3.5 bg-slate-800/60 p-3.5 rounded-2xl border border-slate-700/60">
-            <div className="w-20 h-20 rounded-xl overflow-hidden bg-slate-800 flex-shrink-0 border border-slate-700">
+          <div className="flex items-start gap-3.5 bg-slate-800/60 light:bg-slate-100 p-3.5 rounded-2xl border border-slate-700/60 light:border-slate-200">
+            <div className="w-20 h-20 rounded-xl overflow-hidden bg-slate-800 light:bg-white flex-shrink-0 border border-slate-700 light:border-slate-200">
               <img
                 src={imageSrc}
                 alt={product.name}
@@ -128,22 +127,22 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             </div>
 
             <div className="flex-1 min-w-0">
-              <h2 className="text-base font-bold text-white leading-tight">
+              <h2 className="text-base font-bold text-white light:text-slate-900 leading-tight">
                 {product.name}
               </h2>
 
               {product.sku && (
-                <div className="text-xs font-mono text-emerald-400 mt-1">
+                <div className="text-xs font-mono text-emerald-400 light:text-emerald-700 font-semibold mt-1">
                   SKU: {product.sku}
                 </div>
               )}
 
               {product.details ? (
-                <p className="text-xs text-slate-300 mt-1.5 leading-relaxed line-clamp-3">
+                <p className="text-xs text-slate-300 light:text-slate-600 mt-1.5 leading-relaxed line-clamp-3">
                   {product.details}
                 </p>
               ) : (
-                <p className="text-xs text-slate-500 italic mt-1.5">
+                <p className="text-xs text-slate-500 light:text-slate-400 italic mt-1.5">
                   No extra details provided.
                 </p>
               )}
@@ -152,42 +151,42 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
           {/* Aggregated Stock Numbers KPI */}
           <div className="grid grid-cols-3 gap-2">
-            <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3 text-center">
-              <span className="text-[10px] uppercase font-semibold text-slate-400 tracking-wider">
+            <div className="bg-slate-800/80 light:bg-emerald-50/80 border border-slate-700/80 light:border-emerald-200 rounded-2xl p-3 text-center">
+              <span className="text-[10px] uppercase font-semibold text-slate-400 light:text-emerald-800 tracking-wider">
                 Total Stock
               </span>
-              <div className="text-xl font-bold font-mono text-emerald-400 mt-0.5">
+              <div className="text-xl font-bold font-mono text-emerald-400 light:text-emerald-700 mt-0.5">
                 {product.totalStock}
               </div>
-              <span className="text-[10px] text-slate-400">{product.unit}</span>
+              <span className="text-[10px] text-slate-400 light:text-emerald-600 font-medium">{product.unit}</span>
             </div>
 
-            <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3 text-center">
-              <span className="text-[10px] uppercase font-semibold text-slate-400 tracking-wider">
+            <div className="bg-slate-800/80 light:bg-cyan-50/80 border border-slate-700/80 light:border-cyan-200 rounded-2xl p-3 text-center">
+              <span className="text-[10px] uppercase font-semibold text-slate-400 light:text-cyan-800 tracking-wider">
                 Audit Stock
               </span>
-              <div className="text-xl font-bold font-mono text-cyan-400 mt-0.5">
+              <div className="text-xl font-bold font-mono text-cyan-400 light:text-cyan-700 mt-0.5">
                 {product.totalAuditStock}
               </div>
-              <span className="text-[10px] text-slate-400">{product.unit}</span>
+              <span className="text-[10px] text-slate-400 light:text-cyan-600 font-medium">{product.unit}</span>
             </div>
 
-            <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3 text-center">
-              <span className="text-[10px] uppercase font-semibold text-slate-400 tracking-wider">
+            <div className="bg-slate-800/80 light:bg-slate-100 border border-slate-700/80 light:border-slate-300 rounded-2xl p-3 text-center">
+              <span className="text-[10px] uppercase font-semibold text-slate-400 light:text-slate-600 tracking-wider">
                 Net Variance
               </span>
               <div
                 className={`text-xl font-bold font-mono mt-0.5 ${
                   totalVariance === 0
-                    ? 'text-slate-300'
+                    ? 'text-slate-300 light:text-slate-700'
                     : totalVariance > 0
-                    ? 'text-blue-400'
-                    : 'text-rose-400'
+                    ? 'text-blue-400 light:text-blue-700'
+                    : 'text-rose-400 light:text-rose-700'
                 }`}
               >
                 {totalVariance > 0 ? `+${totalVariance}` : totalVariance}
               </div>
-              <span className="text-[10px] text-slate-400">
+              <span className="text-[10px] text-slate-400 light:text-slate-600 font-medium">
                 {totalVariance === 0 ? 'Exact match' : totalVariance > 0 ? 'Surplus' : 'Deficit'}
               </span>
             </div>
@@ -197,20 +196,20 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           <div className="space-y-2.5">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
-                  <Building2 className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-sm font-bold text-white light:text-slate-900 flex items-center gap-1.5">
+                  <Building2 className="w-4 h-4 text-emerald-400 light:text-emerald-600" />
                   <span>Division of Stock by Warehouse</span>
                 </h3>
-                <p className="text-[11px] text-slate-400">
+                <p className="text-[11px] text-slate-400 light:text-slate-500">
                   Tap any warehouse below to perform an audit on this item
                 </p>
               </div>
             </div>
 
             {warehouses.length === 0 ? (
-              <div className="p-6 text-center bg-slate-800/40 rounded-2xl border border-slate-800">
+              <div className="p-6 text-center bg-slate-800/40 light:bg-slate-100 rounded-2xl border border-slate-800 light:border-slate-200">
                 <Info className="w-8 h-8 text-slate-500 mx-auto mb-2" />
-                <p className="text-xs text-slate-400">No warehouses registered yet.</p>
+                <p className="text-xs text-slate-400 light:text-slate-500">No warehouses registered yet.</p>
               </div>
             ) : (
               <div className="space-y-2.5">
@@ -228,16 +227,16 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                         triggerHaptic('medium');
                         onSelectWarehouseForAudit(product, wh, stock);
                       }}
-                      className="group relative bg-slate-800/90 hover:bg-slate-750 active:bg-slate-700/80 border border-slate-700/80 hover:border-emerald-500/60 rounded-2xl p-3.5 transition-all cursor-pointer shadow-sm active:scale-[0.99]"
+                      className="group relative bg-slate-800/90 light:bg-white hover:bg-slate-750 light:hover:bg-slate-50 active:bg-slate-700/80 border border-slate-700/80 light:border-slate-200 hover:border-emerald-500/60 light:hover:border-emerald-500 rounded-2xl p-3.5 transition-all cursor-pointer shadow-sm active:scale-[0.99]"
                     >
                       <div className="flex items-center justify-between gap-3">
                         {/* Warehouse info */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-slate-700 text-emerald-400 border border-slate-600">
+                            <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-slate-700 light:bg-blue-100 text-emerald-400 light:text-blue-800 border border-slate-600 light:border-blue-200">
                               {wh.code}
                             </span>
-                            <span className="text-sm font-bold text-white truncate">
+                            <span className="text-sm font-bold text-white light:text-slate-900 truncate">
                               {wh.name}
                             </span>
                           </div>
@@ -310,20 +309,34 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
         </div>
 
         {/* Bottom Bar Info */}
-        <div className="px-4 py-3 bg-slate-950/80 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 safe-bottom">
-          <span className="flex items-center gap-1.5 text-slate-400">
+        <div className="px-4 py-3 bg-slate-950/80 light:bg-slate-100 border-t border-slate-800 light:border-slate-200 flex items-center justify-between text-xs text-slate-400 light:text-slate-600 safe-bottom">
+          <span className="flex items-center gap-1.5 text-slate-400 light:text-slate-600">
             <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
             <span>Tap any warehouse above to begin audit</span>
           </span>
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium"
+            className="px-3 py-1.5 rounded-lg bg-slate-800 light:bg-slate-200 hover:bg-slate-700 light:hover:bg-slate-300 text-slate-200 light:text-slate-800 text-xs font-medium"
           >
             Close
           </button>
         </div>
       </div>
+
+      {/* Safety Deletion Modal with typed confirmation */}
+      <DeleteConfirmationModal
+        isOpen={isDeleting}
+        title="Delete Product"
+        itemName={product.name}
+        itemType="product"
+        isDangerous={true}
+        onConfirm={() => {
+          onDeleteProduct(product.id);
+          onClose();
+        }}
+        onClose={() => setIsDeleting(false)}
+      />
     </div>
   );
 };

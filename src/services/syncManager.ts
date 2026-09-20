@@ -278,6 +278,8 @@ class SyncManager {
               variance?: number;
               notes?: string | null;
               timestamp?: string;
+              is_applied_to_stock_app?: boolean | null;
+              applied_at?: string | null;
             };
             const mapped: AuditLog = {
               id: raw.id,
@@ -290,6 +292,8 @@ class SyncManager {
               variance: raw.variance ?? 0,
               notes: raw.notes || undefined,
               timestamp: raw.timestamp || new Date().toISOString(),
+              isAppliedToStockApp: raw.is_applied_to_stock_app || false,
+              appliedAt: raw.applied_at || undefined,
             };
             await db.auditLogs.put(mapped);
           } else if (payload.eventType === 'DELETE' && payload.old) {

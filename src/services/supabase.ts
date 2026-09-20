@@ -11,8 +11,13 @@ export interface SupabaseConfig {
 }
 
 export function getSupabaseConfig(): SupabaseConfig {
-  const envUrl = import.meta.env.VITE_SUPABASE_URL;
-  const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  const envUrl =
+    import.meta.env.VITE_SUPABASE_URL ||
+    import.meta.env.NEXT_PUBLIC_SUPABASE_URL;
+  const envKey =
+    import.meta.env.VITE_SUPABASE_ANON_KEY ||
+    import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (envUrl && envKey && !envUrl.includes('your-project-id')) {
     return {

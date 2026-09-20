@@ -23,7 +23,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-30 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 safe-bottom">
+    <nav className="fixed bottom-0 left-0 right-0 z-30 bg-slate-900/95 light:bg-white/95 backdrop-blur-md border-t border-slate-800 light:border-slate-200 safe-bottom transition-colors shadow-lg">
       <div className="max-w-2xl mx-auto flex items-center justify-around px-2 py-1.5">
         {tabs.map((tab) => {
           const Icon = tab.icon;
@@ -39,8 +39,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               }}
               className={`relative flex flex-col items-center justify-center flex-1 py-1.5 px-1 rounded-xl transition-all ${
                 isActive
-                  ? 'text-emerald-400 font-semibold scale-105'
-                  : 'text-slate-400 hover:text-slate-200 active:scale-95'
+                  ? 'text-emerald-400 light:text-emerald-700 font-bold scale-105'
+                  : 'text-slate-400 light:text-slate-500 hover:text-slate-200 light:hover:text-slate-900 active:scale-95'
               }`}
             >
               <div className="relative">
@@ -53,7 +53,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               </div>
               <span className="text-[10px] mt-1 tracking-tight">{tab.label}</span>
               {isActive && (
-                <span className="absolute -bottom-1 w-5 h-0.5 rounded-full bg-emerald-400" />
+                <span className="absolute -bottom-1 w-5 h-0.5 rounded-full bg-emerald-400 light:bg-emerald-600" />
               )}
             </button>
           );

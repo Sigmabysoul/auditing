@@ -68,6 +68,7 @@ export async function recordAudit(
       variance,
       notes,
       timestamp,
+      isAppliedToStockApp: false,
     };
 
     await db.auditLogs.add(logEntry);
@@ -81,21 +82,39 @@ export async function recordAudit(
   });
 }
 
-// Seed initial realistic data if database is empty
-export async function seedInitialDataIfNeeded(force = false): Promise<void> {
-  const warehouseCount = await db.warehouses.count();
-  if (warehouseCount > 0 && !force) {
-    return;
-  }
+// Toggle whether an audit entry has been keyed into the real warehouse stock app
+export async function toggleAuditLogApplied(logId: string): Promise<boolean> {
+  const log = await db.auditLogs.get(logId);
+  if (!log) return false;
 
-  if (force) {
+  const nextState = !log.isAppliedToStockApp;
+  await db.auditLogs.update(logId, {
+    isAppliedToStockApp: nextState,
+    appliedAt: nextState ? new Date().toISOString() : undefined,
+  });
+
+  return nextState;
+}
+
+// Clear all database tables
+export async function clearAllData(): Promise<void> {
+  await db.transaction('rw', [db.warehouseStocks, db.auditLogs, db.products, db.categories, db.warehouses], async () => {
     await db.warehouseStocks.clear();
     await db.auditLogs.clear();
     await db.products.clear();
     await db.categories.clear();
     await db.warehouses.clear();
+  });
+}
+
+// Seed initial realistic data only when explicitly requested (dummy data removed by default)
+export async function seedInitialDataIfNeeded(force = false): Promise<void> {
+  if (!force) {
+    // Keep local database clean for real-life warehouse operations!
+    return;
   }
 
+  await clearAllData();
   const now = new Date().toISOString();
 
   // 1. Initial Warehouses

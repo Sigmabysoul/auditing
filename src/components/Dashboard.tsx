@@ -13,7 +13,8 @@ import {
   Layers,
   ArrowDown10,
   ArrowUp01,
-  X
+  X,
+  Plus,
 } from 'lucide-react';
 import { triggerHaptic } from '../utils/imageUtils';
 
@@ -26,10 +27,14 @@ export type SortField =
   | 'stock-low'
   | 'warehouse-stock';
 
+export type AuditFilterOption = 'all' | 'needs-audit' | 'discrepancy' | 'low-stock';
+
 interface DashboardProps {
   products: ProductWithAggregateStock[];
   categories: Category[];
   warehouses: Warehouse[];
+  selectedWarehouseId: string;
+  onSelectWarehouse: (warehouseId: string) => void;
   onSelectProduct: (product: ProductWithAggregateStock) => void;
   onOpenNewProduct: () => void;
 }
@@ -38,24 +43,46 @@ export const Dashboard: React.FC<DashboardProps> = ({
   products,
   categories,
   warehouses,
+  selectedWarehouseId,
+  onSelectWarehouse,
   onSelectProduct,
   onOpenNewProduct,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [auditFilter, setAuditFilter] = useState<AuditFilterOption>('all');
   const [sortField, setSortField] = useState<SortField>('name-asc');
-  const [sortWarehouseId, setSortWarehouseId] = useState<string>('all');
-  const [filterDiscrepancyOnly, setFilterDiscrepancyOnly] = useState(false);
   const [showSortSheet, setShowSortSheet] = useState(false);
+
+  const selectedWarehouse = useMemo(() => {
+    return warehouses.find((w) => w.id === selectedWarehouseId);
+  }, [warehouses, selectedWarehouseId]);
 
   // Overall KPI metrics
   const totalStockSum = useMemo(() => {
+    if (selectedWarehouse) {
+      return products.reduce((acc, p) => {
+        const stock = p.stocks.find((s) => s.warehouseId === selectedWarehouse.id);
+        return acc + (stock?.auditNumber ?? stock?.stockNumber ?? 0);
+      }, 0);
+    }
     return products.reduce((acc, p) => acc + p.totalStock, 0);
-  }, [products]);
+  }, [products, selectedWarehouse]);
 
   const discrepanciesCount = useMemo(() => {
     return products.filter((p) => p.hasDiscrepancy).length;
   }, [products]);
+
+  const needsAuditCount = useMemo(() => {
+    const fourteenDaysAgo = new Date().getTime() - 1000 * 60 * 60 * 24 * 14;
+    return products.filter((p) => {
+      const last = selectedWarehouse
+        ? p.stocks.find((s) => s.warehouseId === selectedWarehouse.id)?.lastAuditedAt
+        : p.lastAuditedAt;
+      if (!last) return true;
+      return new Date(last).getTime() < fourteenDaysAgo;
+    }).length;
+  }, [products, selectedWarehouse]);
 
   // Filtered and Sorted Products
   const processedProducts = useMemo(() => {
@@ -75,9 +102,27 @@ export const Dashboard: React.FC<DashboardProps> = ({
           return false;
         }
 
-        // Discrepancy filter
-        if (filterDiscrepancyOnly && !p.hasDiscrepancy) {
+        // Audit state filter (User request: "some filter so the user can see what need to do auditing off")
+        if (auditFilter === 'needs-audit') {
+          const fourteenDaysAgo = new Date().getTime() - 1000 * 60 * 60 * 24 * 14;
+          const last = selectedWarehouse
+            ? p.stocks.find((s) => s.warehouseId === selectedWarehouse.id)?.lastAuditedAt
+            : p.lastAuditedAt;
+          if (!last) return true;
+          if (new Date(last).getTime() >= fourteenDaysAgo) return false;
+        }
+
+        if (auditFilter === 'discrepancy' && !p.hasDiscrepancy) {
           return false;
+        }
+
+        if (auditFilter === 'low-stock') {
+          const currentStock = selectedWarehouse
+            ? (p.stocks.find((s) => s.warehouseId === selectedWarehouse.id)?.auditNumber ?? 0)
+            : p.totalStock;
+          if (p.minStockThreshold === undefined || currentStock > p.minStockThreshold) {
+            return false;
+          }
         }
 
         return true;
@@ -103,24 +148,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
           return timeA - timeB;
         }
 
-        // 3. Overall Stock quantity
+        // 3. Stock quantity
         if (sortField === 'stock-high') {
-          return b.totalStock - a.totalStock;
+          const sA = selectedWarehouse ? (a.stocks.find(s => s.warehouseId === selectedWarehouse.id)?.auditNumber ?? 0) : a.totalStock;
+          const sB = selectedWarehouse ? (b.stocks.find(s => s.warehouseId === selectedWarehouse.id)?.auditNumber ?? 0) : b.totalStock;
+          return sB - sA;
         }
         if (sortField === 'stock-low') {
-          return a.totalStock - b.totalStock;
-        }
-
-        // 4. Warehouse specific stock
-        if (sortField === 'warehouse-stock' && sortWarehouseId !== 'all') {
-          const stockA = a.stocks.find((s) => s.warehouseId === sortWarehouseId)?.auditNumber ?? 0;
-          const stockB = b.stocks.find((s) => s.warehouseId === sortWarehouseId)?.auditNumber ?? 0;
-          return stockB - stockA; // Highest in this warehouse first
+          const sA = selectedWarehouse ? (a.stocks.find(s => s.warehouseId === selectedWarehouse.id)?.auditNumber ?? 0) : a.totalStock;
+          const sB = selectedWarehouse ? (b.stocks.find(s => s.warehouseId === selectedWarehouse.id)?.auditNumber ?? 0) : b.totalStock;
+          return sA - sB;
         }
 
         return 0;
       });
-  }, [products, searchQuery, selectedCategory, sortField, sortWarehouseId, filterDiscrepancyOnly]);
+  }, [products, searchQuery, selectedCategory, auditFilter, sortField, selectedWarehouse]);
 
   const categoryMap = useMemo(() => {
     const map = new Map<string, Category>();
@@ -128,142 +170,187 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return map;
   }, [categories]);
 
-  const activeWarehouseName = useMemo(() => {
-    if (sortWarehouseId === 'all') return 'All Warehouses';
-    return warehouses.find((w) => w.id === sortWarehouseId)?.name || 'Selected Warehouse';
-  }, [warehouses, sortWarehouseId]);
-
   return (
-    <div className="space-y-3 pb-24 max-w-2xl mx-auto px-4 pt-3">
-      {/* Quick KPI Stats Bar */}
-      <div className="grid grid-cols-3 gap-2">
-        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-2.5 shadow-sm">
-          <div className="flex items-center gap-1 text-[10px] uppercase font-bold text-slate-400">
-            <Package className="w-3 h-3 text-emerald-400" />
+    <div className="space-y-4 pb-24 max-w-7xl mx-auto px-3 sm:px-6 pt-4">
+      {/* KPI Stats Bar - Responsive on Desktop/Mobile */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-slate-900/90 light:bg-white border border-slate-800 light:border-slate-200 rounded-3xl p-4 shadow-sm">
+          <div className="flex items-center gap-1.5 text-xs uppercase font-bold text-slate-400 light:text-slate-500">
+            <Package className="w-4 h-4 text-emerald-400 light:text-emerald-600" />
             <span>Products</span>
           </div>
-          <div className="text-xl font-bold font-mono text-white mt-0.5">
+          <div className="text-2xl sm:text-3xl font-black font-mono text-white light:text-slate-900 mt-1">
             {products.length}
           </div>
+          <span className="text-[11px] text-slate-400 light:text-slate-500">Tracked items</span>
         </div>
 
-        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-2.5 shadow-sm">
-          <div className="flex items-center gap-1 text-[10px] uppercase font-bold text-slate-400">
-            <Layers className="w-3 h-3 text-cyan-400" />
-            <span>Total Units</span>
+        <div className="bg-slate-900/90 light:bg-white border border-slate-800 light:border-slate-200 rounded-3xl p-4 shadow-sm">
+          <div className="flex items-center gap-1.5 text-xs uppercase font-bold text-slate-400 light:text-slate-500">
+            <Layers className="w-4 h-4 text-cyan-400 light:text-cyan-600" />
+            <span>{selectedWarehouse ? `${selectedWarehouse.code} Units` : 'Total Units'}</span>
           </div>
-          <div className="text-xl font-bold font-mono text-cyan-400 mt-0.5">
+          <div className="text-2xl sm:text-3xl font-black font-mono text-cyan-400 light:text-cyan-600 mt-1">
             {totalStockSum}
           </div>
+          <span className="text-[11px] text-slate-400 light:text-slate-500">
+            {selectedWarehouse ? `In ${selectedWarehouse.name}` : 'Across all rooms'}
+          </span>
         </div>
 
+        {/* Needs Audit Filter KPI */}
         <div
           onClick={() => {
             triggerHaptic('light');
-            setFilterDiscrepancyOnly(!filterDiscrepancyOnly);
+            setAuditFilter((prev) => (prev === 'needs-audit' ? 'all' : 'needs-audit'));
           }}
-          className={`border rounded-2xl p-2.5 shadow-sm cursor-pointer transition ${
-            discrepanciesCount > 0
-              ? 'bg-rose-950/20 border-rose-500/30 text-rose-300'
-              : 'bg-slate-900/90 border-slate-800 text-slate-400'
+          className={`border rounded-3xl p-4 shadow-sm cursor-pointer transition active:scale-95 ${
+            auditFilter === 'needs-audit'
+              ? 'bg-amber-500/20 light:bg-amber-100 border-amber-500/50 light:border-amber-400 text-amber-300 light:text-amber-800'
+              : 'bg-slate-900/90 light:bg-white border-slate-800 light:border-slate-200 text-slate-400 light:text-slate-600'
           }`}
         >
-          <div className="flex items-center gap-1 text-[10px] uppercase font-bold">
-            <AlertCircle className="w-3 h-3 text-rose-400" />
-            <span>Variance Alert</span>
+          <div className="flex items-center gap-1.5 text-xs uppercase font-bold text-amber-400 light:text-amber-600">
+            <Clock className="w-4 h-4" />
+            <span>Needs Audit</span>
           </div>
-          <div className="text-xl font-bold font-mono text-rose-400 mt-0.5">
+          <div className="text-2xl sm:text-3xl font-black font-mono text-amber-400 light:text-amber-600 mt-1">
+            {needsAuditCount}
+          </div>
+          <span className="text-[11px]">Never or &gt;14d unchecked</span>
+        </div>
+
+        {/* Discrepancy Filter KPI */}
+        <div
+          onClick={() => {
+            triggerHaptic('light');
+            setAuditFilter((prev) => (prev === 'discrepancy' ? 'all' : 'discrepancy'));
+          }}
+          className={`border rounded-3xl p-4 shadow-sm cursor-pointer transition active:scale-95 ${
+            auditFilter === 'discrepancy'
+              ? 'bg-rose-500/20 light:bg-rose-100 border-rose-500/50 light:border-rose-400 text-rose-300 light:text-rose-800'
+              : 'bg-slate-900/90 light:bg-white border-slate-800 light:border-slate-200 text-slate-400 light:text-slate-600'
+          }`}
+        >
+          <div className="flex items-center gap-1.5 text-xs uppercase font-bold text-rose-400 light:text-rose-600">
+            <AlertCircle className="w-4 h-4" />
+            <span>Discrepancies</span>
+          </div>
+          <div className="text-2xl sm:text-3xl font-black font-mono text-rose-400 light:text-rose-600 mt-1">
             {discrepanciesCount}
           </div>
+          <span className="text-[11px]">Variance detected</span>
         </div>
       </div>
 
-      {/* Search Bar & Sort Button */}
-      <div className="flex items-center gap-2">
+      {/* Warehouse Banner (when a warehouse is active) */}
+      {selectedWarehouse && (
+        <div className="bg-emerald-500/10 light:bg-emerald-50 border border-emerald-500/30 light:border-emerald-300 rounded-2xl px-4 py-2.5 flex items-center justify-between flex-wrap gap-2 animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-emerald-400 light:text-emerald-700" />
+            <span className="text-xs font-bold text-white light:text-slate-900">
+              Filtering by: <span className="text-emerald-400 light:text-emerald-700 font-mono">[{selectedWarehouse.code}]</span> {selectedWarehouse.name}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => onSelectWarehouse('all')}
+            className="text-xs text-emerald-400 light:text-emerald-700 hover:underline font-semibold"
+          >
+            Show All Warehouses
+          </button>
+        </div>
+      )}
+
+      {/* Search Bar, Fast Audit Filters & Sort */}
+      <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2.5">
+        {/* Search Input */}
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+          <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-400 light:text-slate-500" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search products, SKU or rack..."
-            className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 shadow-inner"
+            placeholder="Search products, SKU or rack location..."
+            className="w-full bg-slate-900 light:bg-white border border-slate-800 light:border-slate-200 rounded-2xl pl-10 pr-9 py-2.5 text-xs sm:text-sm text-white light:text-slate-900 placeholder-slate-500 light:placeholder-slate-400 focus:outline-none focus:border-emerald-500 shadow-inner"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white"
+              className="absolute right-3 top-3 text-slate-400 hover:text-white light:hover:text-slate-900"
             >
               <X className="w-4 h-4" />
             </button>
           )}
         </div>
 
-        {/* Sort & Warehouse Button */}
-        <button
-          type="button"
-          onClick={() => {
-            triggerHaptic('light');
-            setShowSortSheet(true);
-          }}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 text-xs font-semibold active:scale-95 transition shadow-sm"
-        >
-          <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Sort & Filter</span>
-        </button>
-      </div>
-
-      {/* Active Sort / Warehouse Indicator Badge */}
-      {(sortField !== 'name-asc' || sortWarehouseId !== 'all' || filterDiscrepancyOnly) && (
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {sortField !== 'name-asc' && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-              Sorted by:{' '}
-              {sortField === 'name-desc'
-                ? 'Z to A'
-                : sortField === 'audit-recent'
-                ? 'Last Audited'
-                : sortField === 'audit-oldest'
-                ? 'Oldest Audit'
-                : sortField === 'stock-high'
-                ? 'High Stock'
-                : sortField === 'stock-low'
-                ? 'Low Stock'
-                : `WH: ${activeWarehouseName}`}
-            </span>
-          )}
-
-          {sortWarehouseId !== 'all' && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/30">
-              <Building2 className="w-2.5 h-2.5" />
-              <span>{activeWarehouseName}</span>
-            </span>
-          )}
-
-          {filterDiscrepancyOnly && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/15 text-rose-300 border border-rose-500/30">
-              Discrepancies Only
-            </span>
-          )}
+        {/* Audit Filter Segmented Buttons */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic('light');
+              setAuditFilter('all');
+            }}
+            className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition ${
+              auditFilter === 'all'
+                ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                : 'bg-slate-900 light:bg-white border border-slate-800 light:border-slate-200 text-slate-400 light:text-slate-600 hover:text-white'
+            }`}
+          >
+            All Items
+          </button>
 
           <button
             type="button"
             onClick={() => {
               triggerHaptic('light');
-              setSortField('name-asc');
-              setSortWarehouseId('all');
-              setFilterDiscrepancyOnly(false);
+              setAuditFilter('needs-audit');
             }}
-            className="text-[10px] text-slate-400 hover:text-white underline ml-1"
+            className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition flex items-center gap-1.5 ${
+              auditFilter === 'needs-audit'
+                ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                : 'bg-slate-900 light:bg-white border border-slate-800 light:border-slate-200 text-amber-400 light:text-amber-700'
+            }`}
           >
-            Reset
+            <Clock className="w-3.5 h-3.5" />
+            <span>Needs Audit ({needsAuditCount})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic('light');
+              setAuditFilter('discrepancy');
+            }}
+            className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition flex items-center gap-1.5 ${
+              auditFilter === 'discrepancy'
+                ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20'
+                : 'bg-slate-900 light:bg-white border border-slate-800 light:border-slate-200 text-rose-400 light:text-rose-700'
+            }`}
+          >
+            <AlertCircle className="w-3.5 h-3.5" />
+            <span>Shortages ({discrepanciesCount})</span>
+          </button>
+
+          {/* Sort Button */}
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic('light');
+              setShowSortSheet(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 light:bg-white hover:bg-slate-800 light:hover:bg-slate-100 border border-slate-800 light:border-slate-200 text-slate-200 light:text-slate-800 text-xs font-bold active:scale-95 transition shadow-sm whitespace-nowrap"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Sort</span>
           </button>
         </div>
-      )}
+      </div>
 
       {/* Category Filter Pills (Horizontal scrolling) */}
-      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
         <button
           type="button"
           onClick={() => {
@@ -272,11 +359,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
           }}
           className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition flex-shrink-0 ${
             selectedCategory === 'all'
-              ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-              : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'
+              ? 'bg-slate-800 light:bg-slate-200 text-white light:text-slate-900 shadow-sm'
+              : 'bg-slate-900/60 light:bg-white border border-slate-800 light:border-slate-200 text-slate-400 light:text-slate-600 hover:text-white'
           }`}
         >
-          All Items ({products.length})
+          All Categories ({products.length})
         </button>
 
         {categories.map((cat) => {
@@ -293,14 +380,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
               }}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition flex-shrink-0 flex items-center gap-1.5 border ${
                 isSelected
-                  ? 'bg-slate-800 text-white border-slate-600 shadow-md'
-                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                  ? 'bg-slate-800 light:bg-slate-200 text-white light:text-slate-900 border-slate-600 light:border-slate-300 shadow-sm'
+                  : 'bg-slate-900/60 light:bg-white border border-slate-800 light:border-slate-200 text-slate-400 light:text-slate-600 hover:text-slate-200'
               }`}
             >
-              <span
-                className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: cat.color }}
-              />
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
               <span>{cat.name}</span>
               <span className="text-[10px] text-slate-500 font-mono">({count})</span>
             </button>
@@ -308,239 +392,171 @@ export const Dashboard: React.FC<DashboardProps> = ({
         })}
       </div>
 
-      {/* Product List / Cards */}
+      {/* Product Grid / Desktop Responsive (1 col on mobile, 2 on tablet, 3 on desktop) */}
       {processedProducts.length === 0 ? (
-        <div className="p-8 text-center bg-slate-900/60 rounded-3xl border border-slate-800/80 space-y-3">
-          <Package className="w-10 h-10 text-slate-600 mx-auto" />
+        <div className="p-10 text-center bg-slate-900/60 light:bg-white rounded-3xl border border-slate-800/80 light:border-slate-200 space-y-4 my-4">
+          <div className="w-14 h-14 rounded-2xl bg-slate-800 light:bg-slate-100 flex items-center justify-center mx-auto text-slate-500">
+            <Package className="w-8 h-8" />
+          </div>
           <div>
-            <h3 className="text-sm font-bold text-white">No products found</h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              {searchQuery ? 'Try changing your search query or filters' : 'Add your first warehouse product to begin auditing'}
+            <h3 className="text-base font-bold text-white light:text-slate-900">No warehouse items found</h3>
+            <p className="text-xs text-slate-400 light:text-slate-500 mt-1 max-w-sm mx-auto">
+              {searchQuery || auditFilter !== 'all' || selectedCategory !== 'all'
+                ? 'Try adjusting your search query or clear the active filter.'
+                : 'Your database is completely clean! Add your first real warehouse product to begin tracking.'}
             </p>
           </div>
           <button
             type="button"
             onClick={onOpenNewProduct}
-            className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs inline-flex items-center gap-1.5 shadow-md transition"
+            className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-bold text-xs inline-flex items-center gap-2 shadow-md transition"
           >
+            <Plus className="w-4 h-4 stroke-[2.5]" />
             <span>Add New Product</span>
           </button>
         </div>
       ) : (
-        <div className="space-y-2.5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
           {processedProducts.map((product) => (
             <ProductCard
               key={product.id}
               product={product}
               category={categoryMap.get(product.categoryId)}
+              selectedWarehouse={selectedWarehouse}
               onClick={() => onSelectProduct(product)}
             />
           ))}
         </div>
       )}
 
-      {/* SORT & WAREHOUSE FILTER BOTTOM SHEET */}
+      {/* SORT BOTTOM SHEET / MODAL */}
       {showSortSheet && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center items-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-150 p-0 sm:p-4">
           <div className="absolute inset-0" onClick={() => setShowSortSheet(false)} />
 
-          <div className="relative z-10 w-full max-w-lg mx-auto bg-slate-900 border-t border-slate-700 rounded-t-3xl p-4 space-y-4 max-h-[85vh] overflow-y-auto shadow-2xl animate-in slide-in-from-bottom duration-200">
-            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto -mt-1 mb-2" />
-
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+          <div className="relative z-10 w-full max-w-lg bg-slate-900 light:bg-white border border-slate-700 light:border-slate-200 rounded-t-3xl sm:rounded-3xl p-5 space-y-4 max-h-[85vh] overflow-y-auto shadow-2xl animate-in slide-in-from-bottom sm:zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-800 light:border-slate-200 pb-3">
+              <h3 className="text-sm font-bold text-white light:text-slate-900 flex items-center gap-2">
                 <SlidersHorizontal className="w-4 h-4 text-emerald-400" />
-                <span>Sort & Warehouse Options</span>
+                <span>Sort Products</span>
               </h3>
               <button
                 type="button"
                 onClick={() => setShowSortSheet(false)}
-                className="p-1 text-slate-400 hover:text-white"
+                className="p-1 text-slate-400 hover:text-white light:hover:text-slate-900"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* 1. Sort by Alphabetical & Date (User requested!) */}
-            <div className="space-y-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Sort Products By
-              </span>
-
-              <div className="grid grid-cols-2 gap-2">
-                {/* Alphabet A-Z */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic('light');
-                    setSortField('name-asc');
-                  }}
-                  className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition ${
-                    sortField === 'name-asc'
-                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
-                      : 'bg-slate-800/80 text-slate-300 border-slate-700/80 hover:bg-slate-750'
-                  }`}
-                >
-                  <ArrowDownAZ className="w-4 h-4" />
-                  <span>Alphabet (A → Z)</span>
-                </button>
-
-                {/* Alphabet Z-A */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic('light');
-                    setSortField('name-desc');
-                  }}
-                  className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition ${
-                    sortField === 'name-desc'
-                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
-                      : 'bg-slate-800/80 text-slate-300 border-slate-700/80 hover:bg-slate-750'
-                  }`}
-                >
-                  <ArrowUpAZ className="w-4 h-4" />
-                  <span>Alphabet (Z → A)</span>
-                </button>
-
-                {/* Last Audited - Most Recent (User requested!) */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic('light');
-                    setSortField('audit-recent');
-                  }}
-                  className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition ${
-                    sortField === 'audit-recent'
-                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
-                      : 'bg-slate-800/80 text-slate-300 border-slate-700/80 hover:bg-slate-750'
-                  }`}
-                >
-                  <Clock className="w-4 h-4" />
-                  <span>Last Audited First</span>
-                </button>
-
-                {/* Last Audited - Oldest / Never Audited (User requested!) */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic('light');
-                    setSortField('audit-oldest');
-                  }}
-                  className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition ${
-                    sortField === 'audit-oldest'
-                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
-                      : 'bg-slate-800/80 text-slate-300 border-slate-700/80 hover:bg-slate-750'
-                  }`}
-                >
-                  <Clock className="w-4 h-4 text-amber-400" />
-                  <span>Needs Audit First</span>
-                </button>
-
-                {/* Highest Total Stock */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic('light');
-                    setSortField('stock-high');
-                  }}
-                  className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition ${
-                    sortField === 'stock-high'
-                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
-                      : 'bg-slate-800/80 text-slate-300 border-slate-700/80 hover:bg-slate-750'
-                  }`}
-                >
-                  <ArrowDown10 className="w-4 h-4" />
-                  <span>Highest Stock Count</span>
-                </button>
-
-                {/* Lowest Total Stock */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic('light');
-                    setSortField('stock-low');
-                  }}
-                  className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition ${
-                    sortField === 'stock-low'
-                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
-                      : 'bg-slate-800/80 text-slate-300 border-slate-700/80 hover:bg-slate-750'
-                  }`}
-                >
-                  <ArrowUp01 className="w-4 h-4 text-rose-400" />
-                  <span>Lowest Stock Count</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 2. Sort by Different Warehouses (User requested!) */}
-            <div className="space-y-2 pt-2 border-t border-slate-800">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5 text-blue-400" />
-                <span>Sort by Warehouse Stock</span>
-              </span>
-              <p className="text-[11px] text-slate-400">
-                Order products by their stock level in a specific stockroom:
-              </p>
-
-              <div className="space-y-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic('light');
-                    setSortWarehouseId('all');
-                    if (sortField === 'warehouse-stock') setSortField('name-asc');
-                  }}
-                  className={`w-full p-2 rounded-xl text-xs font-semibold flex items-center justify-between border transition ${
-                    sortWarehouseId === 'all'
-                      ? 'bg-blue-500/20 text-blue-400 border-blue-500/40'
-                      : 'bg-slate-800/70 text-slate-300 border-slate-700 hover:bg-slate-750'
-                  }`}
-                >
-                  <span>All Warehouses Combined</span>
-                  {sortWarehouseId === 'all' && <span>✓</span>}
-                </button>
-
-                {warehouses.map((wh) => (
-                  <button
-                    key={wh.id}
-                    type="button"
-                    onClick={() => {
-                      triggerHaptic('light');
-                      setSortWarehouseId(wh.id);
-                      setSortField('warehouse-stock');
-                    }}
-                    className={`w-full p-2 rounded-xl text-xs font-semibold flex items-center justify-between border transition ${
-                      sortWarehouseId === wh.id && sortField === 'warehouse-stock'
-                        ? 'bg-blue-500/20 text-blue-400 border-blue-500/40'
-                        : 'bg-slate-800/70 text-slate-300 border-slate-700 hover:bg-slate-750'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">
-                        {wh.code}
-                      </span>
-                      <span>{wh.name}</span>
-                    </div>
-                    {sortWarehouseId === wh.id && sortField === 'warehouse-stock' && <span>✓</span>}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Done button */}
-            <div className="pt-2 safe-bottom">
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => setShowSortSheet(false)}
-                className="w-full py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition"
+                onClick={() => {
+                  triggerHaptic('light');
+                  setSortField('name-asc');
+                }}
+                className={`p-3 rounded-xl border text-xs font-semibold flex items-center gap-2 transition ${
+                  sortField === 'name-asc'
+                    ? 'bg-emerald-500/20 text-emerald-400 light:text-emerald-700 border-emerald-500/50'
+                    : 'bg-slate-800/80 light:bg-slate-100 text-slate-300 light:text-slate-700 border-slate-700/80 light:border-slate-200'
+                }`}
               >
-                Apply Sort & Filters
+                <ArrowDownAZ className="w-4 h-4" />
+                <span>Name (A &rarr; Z)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('light');
+                  setSortField('name-desc');
+                }}
+                className={`p-3 rounded-xl border text-xs font-semibold flex items-center gap-2 transition ${
+                  sortField === 'name-desc'
+                    ? 'bg-emerald-500/20 text-emerald-400 light:text-emerald-700 border-emerald-500/50'
+                    : 'bg-slate-800/80 light:bg-slate-100 text-slate-300 light:text-slate-700 border-slate-700/80 light:border-slate-200'
+                }`}
+              >
+                <ArrowUpAZ className="w-4 h-4" />
+                <span>Name (Z &rarr; A)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('light');
+                  setSortField('audit-oldest');
+                }}
+                className={`p-3 rounded-xl border text-xs font-semibold flex items-center gap-2 transition ${
+                  sortField === 'audit-oldest'
+                    ? 'bg-amber-500/20 text-amber-400 light:text-amber-800 border-amber-500/50'
+                    : 'bg-slate-800/80 light:bg-slate-100 text-slate-300 light:text-slate-700 border-slate-700/80 light:border-slate-200'
+                }`}
+              >
+                <Clock className="w-4 h-4 text-amber-400" />
+                <span>Needs Audit First</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('light');
+                  setSortField('audit-recent');
+                }}
+                className={`p-3 rounded-xl border text-xs font-semibold flex items-center gap-2 transition ${
+                  sortField === 'audit-recent'
+                    ? 'bg-emerald-500/20 text-emerald-400 light:text-emerald-700 border-emerald-500/50'
+                    : 'bg-slate-800/80 light:bg-slate-100 text-slate-300 light:text-slate-700 border-slate-700/80 light:border-slate-200'
+                }`}
+              >
+                <Clock className="w-4 h-4 text-emerald-400" />
+                <span>Recent Audits</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('light');
+                  setSortField('stock-high');
+                }}
+                className={`p-3 rounded-xl border text-xs font-semibold flex items-center gap-2 transition ${
+                  sortField === 'stock-high'
+                    ? 'bg-emerald-500/20 text-emerald-400 light:text-emerald-700 border-emerald-500/50'
+                    : 'bg-slate-800/80 light:bg-slate-100 text-slate-300 light:text-slate-700 border-slate-700/80 light:border-slate-200'
+                }`}
+              >
+                <ArrowDown10 className="w-4 h-4" />
+                <span>Highest Stock</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('light');
+                  setSortField('stock-low');
+                }}
+                className={`p-3 rounded-xl border text-xs font-semibold flex items-center gap-2 transition ${
+                  sortField === 'stock-low'
+                    ? 'bg-rose-500/20 text-rose-400 light:text-rose-700 border-rose-500/50'
+                    : 'bg-slate-800/80 light:bg-slate-100 text-slate-300 light:text-slate-700 border-slate-700/80 light:border-slate-200'
+                }`}
+              >
+                <ArrowUp01 className="w-4 h-4 text-rose-400" />
+                <span>Lowest Stock</span>
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={() => setShowSortSheet(false)}
+              className="w-full py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition"
+            >
+              Apply Sorting
+            </button>
           </div>
         </div>
       )}
     </div>
   );
 };
-

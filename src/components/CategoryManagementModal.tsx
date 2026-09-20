@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { db } from '../db/db';
 import { triggerHaptic } from '../utils/imageUtils';
+import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 
 interface CategoryManagementModalProps {
   categories: Category[];
@@ -40,6 +41,7 @@ export const CategoryManagementModal: React.FC<CategoryManagementModalProps> = (
   const [color, setColor] = useState('#f59e0b');
   const [description, setDescription] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
 
   const resetForm = () => {
     setName('');
@@ -94,22 +96,20 @@ export const CategoryManagementModal: React.FC<CategoryManagementModalProps> = (
     }
   };
 
-  const handleDeleteCategory = async (cat: Category) => {
+  const executeDeleteCategory = async (cat: Category) => {
+    await db.categories.delete(cat.id);
+    triggerHaptic('light');
+    setDeletingCategory(null);
+    onRefresh();
+  };
+
+  const handleDeleteCategory = (cat: Category) => {
     if (categories.length <= 1) {
       alert('You must keep at least one category.');
       return;
     }
-
     triggerHaptic('warning');
-    if (
-      window.confirm(
-        `Delete category "${cat.name}"? Existing products in this category will keep their records.`
-      )
-    ) {
-      await db.categories.delete(cat.id);
-      triggerHaptic('light');
-      onRefresh();
-    }
+    setDeletingCategory(cat);
   };
 
   return (
@@ -264,16 +264,28 @@ export const CategoryManagementModal: React.FC<CategoryManagementModalProps> = (
           </div>
         </div>
 
-        <div className="px-4 py-3 bg-slate-950/80 border-t border-slate-800 flex justify-end safe-bottom">
+        <div className="px-4 py-3 bg-slate-950/80 light:bg-slate-100 border-t border-slate-800 light:border-slate-200 flex justify-end safe-bottom">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold"
+            className="px-4 py-2 rounded-xl bg-slate-800 light:bg-slate-200 hover:bg-slate-700 light:hover:bg-slate-300 text-white light:text-slate-900 text-xs font-semibold"
           >
             Done
           </button>
         </div>
       </div>
+
+      {deletingCategory && (
+        <DeleteConfirmationModal
+          isOpen={!!deletingCategory}
+          title="Delete Category"
+          itemName={deletingCategory.name}
+          itemType="category"
+          isDangerous={false}
+          onConfirm={() => executeDeleteCategory(deletingCategory)}
+          onClose={() => setDeletingCategory(null)}
+        />
+      )}
     </div>
   );
 };

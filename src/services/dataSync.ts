@@ -98,6 +98,8 @@ export async function pushLocalToSupabase(): Promise<SyncResult> {
         variance: l.variance ?? 0,
         notes: l.notes || null,
         timestamp: l.timestamp,
+        is_applied_to_stock_app: l.isAppliedToStockApp || false,
+        applied_at: l.appliedAt || null,
       }));
       const { error } = await client.from('audit_logs').upsert(payload);
       if (error) throw new Error(`Audit logs sync error: ${error.message}`);
@@ -192,6 +194,8 @@ export async function pullSupabaseToLocal(): Promise<SyncResult> {
       variance: l.variance,
       notes: l.notes || undefined,
       timestamp: l.timestamp,
+      isAppliedToStockApp: l.is_applied_to_stock_app || false,
+      appliedAt: l.applied_at || undefined,
     }));
 
     await db.transaction('rw', [db.warehouses, db.categories, db.products, db.warehouseStocks, db.auditLogs], async () => {

@@ -49,6 +49,8 @@ export interface AuditLog {
   variance: number;
   notes?: string;
   timestamp: string;
+  isAppliedToStockApp?: boolean; // Track if user entered audit data in the real warehouse stock app
+  appliedAt?: string;
 }
 
 export type ActiveTab = 'dashboard' | 'warehouses' | 'categories' | 'logs' | 'settings';

@@ -9,10 +9,13 @@ import {
   HardDrive,
   Layers,
   FileJson,
-  ShieldCheck
+  ShieldCheck,
+  Palette,
 } from 'lucide-react';
-import { exportDatabaseToJson, importDatabaseFromJson, seedInitialDataIfNeeded, db } from '../db/db';
+import { exportDatabaseToJson, importDatabaseFromJson, seedInitialDataIfNeeded, clearAllData } from '../db/db';
 import { triggerHaptic } from '../utils/imageUtils';
+import { DeleteConfirmationModal } from './DeleteConfirmationModal';
+import { useTheme } from '../context/ThemeContext';
 
 interface SettingsViewProps {
   onDataChanged: () => void;
@@ -20,9 +23,11 @@ interface SettingsViewProps {
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({ onDataChanged, onOpenTransfer }) => {
+  const { theme, setIsThemeModalOpen } = useTheme();
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [isWipeModalOpen, setIsWipeModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const showNotification = (msg: string) => {
@@ -93,30 +98,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onDataChanged, onOpe
     }
   };
 
-  const handleClearAllData = async () => {
-    triggerHaptic('warning');
-    if (window.confirm('CAUTION: Are you sure you want to erase ALL products, warehouses, and audit logs? This cannot be undone.')) {
-      await db.warehouseStocks.clear();
-      await db.auditLogs.clear();
-      await db.products.clear();
-      await db.categories.clear();
-      await db.warehouses.clear();
-      triggerHaptic('light');
-      showNotification('All local data wiped.');
-      onDataChanged();
-    }
+  const executeClearAllData = async () => {
+    await clearAllData();
+    triggerHaptic('light');
+    showNotification('All local data wiped cleanly.');
+    onDataChanged();
   };
 
   return (
     <div className="space-y-4 pb-24 max-w-2xl mx-auto px-4 pt-3">
       {/* Header */}
       <div>
-        <h2 className="text-base font-bold text-white flex items-center gap-2">
-          <HardDrive className="w-5 h-5 text-emerald-400" />
+        <h2 className="text-base font-bold text-white light:text-slate-900 flex items-center gap-2">
+          <HardDrive className="w-5 h-5 text-emerald-400 light:text-emerald-600" />
           <span>Local Storage & Backup</span>
         </h2>
-        <p className="text-xs text-slate-400">
-          All data is saved 100% locally on this phone via IndexedDB
+        <p className="text-xs text-slate-400 light:text-slate-500">
+          All data is saved 100% locally on this device via IndexedDB
         </p>
       </div>
 
@@ -127,6 +125,54 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onDataChanged, onOpe
           <span>{statusMessage}</span>
         </div>
       )}
+
+      {/* Workspace Theme Section */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 space-y-3 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs font-bold text-white">
+            <Palette className="w-4 h-4 text-emerald-400" />
+            <span>Workspace Theme</span>
+          </div>
+          <span className="text-[11px] font-bold text-slate-300 px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700">
+            {theme.name} ({theme.mode})
+          </span>
+        </div>
+        <p className="text-[11px] text-slate-400 leading-relaxed">
+          Customize the aesthetic of your warehouse dashboard. Choose from light and dark color palettes.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => {
+            triggerHaptic('light');
+            setIsThemeModalOpen(true);
+          }}
+          className="w-full flex items-center justify-between p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700 transition active:scale-[0.99]"
+        >
+          <div className="flex items-center gap-2.5">
+            <div
+              className="w-8 h-8 rounded-xl flex items-center justify-center border border-white/20 shadow-sm"
+              style={{ backgroundColor: theme.colors.background }}
+            >
+              <span
+                className="w-3.5 h-3.5 rounded-full shadow-sm"
+                style={{ backgroundColor: theme.colors.primary }}
+              />
+            </div>
+            <div className="text-left">
+              <div className="text-xs font-bold text-white">{theme.name}</div>
+              <div className="text-[10px] text-slate-400">{theme.description}</div>
+            </div>
+          </div>
+
+          <span
+            className="text-xs font-bold px-3 py-1.5 rounded-xl shadow-sm text-white"
+            style={{ backgroundColor: theme.colors.primary }}
+          >
+            Change Theme
+          </span>
+        </button>
+      </div>
 
       {/* Backup & Restore Section */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 space-y-3 shadow-sm">
@@ -208,48 +254,62 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onDataChanged, onOpe
 
           <button
             type="button"
-            onClick={handleClearAllData}
-            className="w-full flex items-center justify-between p-3 rounded-2xl bg-rose-950/20 hover:bg-rose-950/30 active:scale-[0.99] border border-rose-500/30 transition"
+            onClick={() => {
+              triggerHaptic('warning');
+              setIsWipeModalOpen(true);
+            }}
+            className="w-full flex items-center justify-between p-3 rounded-2xl bg-rose-950/20 light:bg-rose-50 hover:bg-rose-950/30 light:hover:bg-rose-100 active:scale-[0.99] border border-rose-500/30 light:border-rose-200 transition"
           >
             <div className="flex items-center gap-2.5 text-left">
-              <Trash2 className="w-4 h-4 text-rose-400 flex-shrink-0" />
+              <Trash2 className="w-4 h-4 text-rose-400 light:text-rose-600 flex-shrink-0" />
               <div>
-                <div className="text-xs font-bold text-rose-300">Wipe All Local Data</div>
-                <div className="text-[10px] text-rose-400/80">Erase all items, stockrooms, and logs</div>
+                <div className="text-xs font-bold text-rose-300 light:text-rose-800">Wipe All Local Data (Start Clean)</div>
+                <div className="text-[10px] text-rose-400/80 light:text-rose-600">Erase all items, stockrooms, and logs</div>
               </div>
             </div>
-            <span className="text-xs text-rose-400 font-semibold">Wipe</span>
+            <span className="text-xs text-rose-400 light:text-rose-700 font-semibold">Wipe</span>
           </button>
         </div>
       </div>
 
       {/* Mobile PWA Installation Guidance */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 space-y-2.5 shadow-sm">
-        <div className="flex items-center gap-2 text-xs font-bold text-white">
+      <div className="bg-slate-900 light:bg-white border border-slate-800 light:border-slate-200 rounded-3xl p-4 space-y-2.5 shadow-sm">
+        <div className="flex items-center gap-2 text-xs font-bold text-white light:text-slate-900">
           <Smartphone className="w-4 h-4 text-emerald-400" />
           <span>Use as Mobile App on your Phone</span>
         </div>
-        <p className="text-[11px] text-slate-300 leading-relaxed">
+        <p className="text-[11px] text-slate-300 light:text-slate-600 leading-relaxed">
           For the fastest warehouse workflow without browser address bars:
         </p>
 
-        <ul className="text-[11px] text-slate-400 space-y-1.5 list-disc pl-4">
+        <ul className="text-[11px] text-slate-400 light:text-slate-600 space-y-1.5 list-disc pl-4">
           <li>
-            <strong className="text-white">Chrome on Android:</strong> Tap the 3 dots menu <span className="text-emerald-400">⋮</span> and select <strong className="text-white">&quot;Install app&quot;</strong> or <strong className="text-white">&quot;Add to Home screen&quot;</strong>.
+            <strong className="text-white light:text-slate-900">Chrome on Android:</strong> Tap the 3 dots menu <span className="text-emerald-400">⋮</span> and select <strong className="text-white light:text-slate-900">&quot;Install app&quot;</strong> or <strong className="text-white light:text-slate-900">&quot;Add to Home screen&quot;</strong>.
           </li>
           <li>
-            <strong className="text-white">Safari on iPhone:</strong> Tap the Share button <span className="text-blue-400">⬆</span> and select <strong className="text-white">&quot;Add to Home Screen&quot;</strong>.
+            <strong className="text-white light:text-slate-900">Safari on iPhone:</strong> Tap the Share button <span className="text-blue-400">⬆</span> and select <strong className="text-white light:text-slate-900">&quot;Add to Home Screen&quot;</strong>.
           </li>
           <li>
-            <strong className="text-white">Local Network:</strong> If running from your PC, access <span className="font-mono text-emerald-400">http://&lt;your-computer-ip&gt;:5173</span> over your warehouse Wi-Fi!
+            <strong className="text-white light:text-slate-900">Local Network:</strong> If running from your PC, access <span className="font-mono text-emerald-400 light:text-emerald-700">http://&lt;your-computer-ip&gt;:5173</span> over your warehouse Wi-Fi!
           </li>
         </ul>
 
-        <div className="flex items-center gap-2 pt-1 text-[11px] text-emerald-400/90 font-medium">
-          <ShieldCheck className="w-4 h-4 flex-shrink-0 text-emerald-400" />
+        <div className="flex items-center gap-2 pt-1 text-[11px] text-emerald-400/90 light:text-emerald-700 font-medium">
+          <ShieldCheck className="w-4 h-4 flex-shrink-0 text-emerald-400 light:text-emerald-600" />
           <span>Runs 100% offline — zero internet needed during audits.</span>
         </div>
       </div>
+
+      {/* Safety Deletion Modal for Wiping Data */}
+      <DeleteConfirmationModal
+        isOpen={isWipeModalOpen}
+        title="Wipe Entire Database"
+        itemName="DELETE ALL"
+        itemType="database"
+        isDangerous={true}
+        onConfirm={executeClearAllData}
+        onClose={() => setIsWipeModalOpen(false)}
+      />
     </div>
   );
 };

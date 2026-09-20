@@ -4,9 +4,9 @@
 
 export async function compressAndResizeImage(
   file: File,
-  maxWidth = 800,
-  maxHeight = 800,
-  quality = 0.8
+  maxWidth = 700,
+  maxHeight = 700,
+  quality = 0.72
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

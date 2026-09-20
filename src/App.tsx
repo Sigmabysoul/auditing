@@ -21,11 +21,16 @@ import { CategoryManagementModal } from './components/CategoryManagementModal';
 import { AuditHistoryView } from './components/AuditHistoryView';
 import { SettingsView } from './components/SettingsView';
 import { DataTransferModal } from './components/DataTransferModal';
+import { InstallAppModal } from './components/InstallAppModal';
+import { ThemeSelectorModal } from './components/ThemeSelectorModal';
 import { syncManager } from './services/syncManager';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [dbInitialized, setDbInitialized] = useState(false);
+
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('all');
+  const [isInstallAppOpen, setIsInstallAppOpen] = useState(false);
 
   // Modal / Drawer states
   const [selectedProductForDetail, setSelectedProductForDetail] = useState<ProductWithAggregateStock | null>(null);
@@ -135,23 +140,32 @@ export function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-emerald-500 selection:text-slate-950">
-      {/* Top Navbar */}
+    <div className="min-h-screen bg-slate-950 light:bg-slate-50 text-slate-100 light:text-slate-900 flex flex-col selection:bg-emerald-500 selection:text-slate-950 transition-colors">
+      {/* Top Navbar with Warehouse Selector, Desktop Navigation & Sync */}
       <Navbar
+        activeTab={activeTab}
+        onChangeTab={setActiveTab}
+        discrepanciesCount={discrepanciesCount}
         onOpenNewProduct={() => setProductFormState({ isOpen: true })}
         onOpenNewWarehouse={() => setIsManagingWarehouses(true)}
         onOpenNewCategory={() => setIsManagingCategories(true)}
         onOpenTransfer={() => setIsDataTransferOpen(true)}
+        onOpenInstallApp={() => setIsInstallAppOpen(true)}
         totalProductsCount={productsWithStock.length}
+        warehouses={warehouses}
+        selectedWarehouseId={selectedWarehouseId}
+        onSelectWarehouse={setSelectedWarehouseId}
       />
 
-      {/* Main Tab Content */}
-      <main className="flex-1 w-full max-w-2xl mx-auto">
+      {/* Main Tab Content - Scaled to max-w-7xl for Desktop */}
+      <main className="flex-1 w-full max-w-7xl mx-auto px-2 sm:px-4">
         {activeTab === 'dashboard' && (
           <Dashboard
             products={productsWithStock}
             categories={categories}
             warehouses={warehouses}
+            selectedWarehouseId={selectedWarehouseId}
+            onSelectWarehouse={setSelectedWarehouseId}
             onSelectProduct={(prod) => setSelectedProductForDetail(prod)}
             onOpenNewProduct={() => setProductFormState({ isOpen: true })}
           />
@@ -272,14 +286,25 @@ export function App() {
         />
       )}
 
-      {/* Mobile Bottom Navigation Bar */}
-      <BottomNav
-        activeTab={activeTab}
-        onChangeTab={(tab) => {
-          setActiveTab(tab);
-        }}
-        discrepanciesCount={discrepanciesCount}
+      {/* Install App Modal */}
+      <InstallAppModal
+        isOpen={isInstallAppOpen}
+        onClose={() => setIsInstallAppOpen(false)}
       />
+
+      {/* Theme Selector Modal (Desktop & Mobile) */}
+      <ThemeSelectorModal />
+
+      {/* Mobile Bottom Navigation Bar */}
+      <div className="md:hidden">
+        <BottomNav
+          activeTab={activeTab}
+          onChangeTab={(tab) => {
+            setActiveTab(tab);
+          }}
+          discrepanciesCount={discrepanciesCount}
+        />
+      </div>
     </div>
   );
 }
