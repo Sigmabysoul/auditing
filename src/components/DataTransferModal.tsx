@@ -13,7 +13,11 @@ import {
   Key,
   Globe,
   Sparkles,
-  ShieldCheck
+  ShieldCheck,
+  RefreshCw,
+  Loader2,
+  Radio,
+  Clock
 } from 'lucide-react';
 import { exportDatabaseToJson, importDatabaseFromJson } from '../db/db';
 import {
@@ -23,6 +27,7 @@ import {
   type SupabaseConfig
 } from '../services/supabase';
 import { pushLocalToSupabase, pullSupabaseToLocal } from '../services/dataSync';
+import { useSyncStatus, syncManager } from '../services/syncManager';
 import { triggerHaptic } from '../utils/imageUtils';
 
 interface DataTransferModalProps {
@@ -46,12 +51,22 @@ export const DataTransferModal: React.FC<DataTransferModalProps> = ({
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Sync Manager hook
+  const {
+    status: syncStatus,
+    lastSyncedAt,
+    isOnlineSyncEnabled,
+    toggleOnlineSync,
+    syncNow,
+  } = useSyncStatus();
+
   // Supabase states
   const [supabaseConfig, setSupabaseConfig] = useState<SupabaseConfig>(() => getSupabaseConfig());
   const [inputUrl, setInputUrl] = useState(() => getSupabaseConfig().url);
   const [inputKey, setInputKey] = useState(() => getSupabaseConfig().anonKey);
   const [isTesting, setIsTesting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
 
   const notify = (type: 'success' | 'error', text: string) => {
     setToastMessage({ type, text });
@@ -118,11 +133,28 @@ export const DataTransferModal: React.FC<DataTransferModalProps> = ({
     saveSupabaseConfig(inputUrl.trim(), inputKey.trim());
     const updated = getSupabaseConfig();
     setSupabaseConfig(updated);
+    syncManager.checkAndConnect();
     triggerHaptic('success');
-    notify('success', 'Supabase credentials saved!');
+    notify('success', 'Supabase credentials saved & connection refreshed!');
   };
 
-  // 4. Test Supabase Connection
+  // 4. Manual Sync (Push local + Pull cloud)
+  const handleManualSync = async () => {
+    setIsManualSyncing(true);
+    triggerHaptic('light');
+    const res = await syncNow();
+    if (res.success) {
+      triggerHaptic('success');
+      notify('success', res.message);
+      onDataChanged();
+    } else {
+      triggerHaptic('warning');
+      notify('error', res.message);
+    }
+    setIsManualSyncing(false);
+  };
+
+  // 5. Test Supabase Connection
   const handleTestConnection = async () => {
     setIsTesting(true);
     triggerHaptic('light');
@@ -379,8 +411,108 @@ export const DataTransferModal: React.FC<DataTransferModalProps> = ({
             </div>
           ) : (
             /* =================== TAB 2: SUPABASE & VERCEL =================== */
-            <div className="space-y-4">
-              {/* Cloud Connection Status Badge */}
+            <div className="space-y-3.5">
+              {/* 1. Realtime Online Sync Toggle Card */}
+              <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-3.5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Radio className={`w-4 h-4 ${isOnlineSyncEnabled && syncStatus === 'live' ? 'text-emerald-400 animate-pulse' : 'text-slate-400'}`} />
+                    <div>
+                      <h4 className="text-xs font-bold text-white">Realtime Online Sync</h4>
+                      <p className="text-[10px] text-slate-400">Keep inventory and audits live with Supabase</p>
+                    </div>
+                  </div>
+
+                  {/* Toggle Switch */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('light');
+                      toggleOnlineSync(!isOnlineSyncEnabled);
+                    }}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      isOnlineSyncEnabled ? 'bg-emerald-500' : 'bg-slate-700'
+                    }`}
+                    title="Toggle Online Realtime Sync"
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        isOnlineSyncEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Status & Last Synced Timestamp Strip */}
+                <div className="flex items-center justify-between pt-2 border-t border-slate-700/60 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-400 text-[11px]">Status:</span>
+                    <span
+                      className={`font-semibold text-[11px] flex items-center gap-1 ${
+                        syncStatus === 'live'
+                          ? 'text-emerald-400'
+                          : syncStatus === 'syncing'
+                          ? 'text-amber-400'
+                          : syncStatus === 'connecting'
+                          ? 'text-blue-400'
+                          : syncStatus === 'offline'
+                          ? 'text-rose-400'
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      {syncStatus === 'live' && (
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      )}
+                      {syncStatus === 'live'
+                        ? 'Connected (Live Realtime)'
+                        : syncStatus === 'syncing'
+                        ? 'Syncing in progress...'
+                        : syncStatus === 'connecting'
+                        ? 'Connecting to cloud...'
+                        : syncStatus === 'offline'
+                        ? 'Device Offline'
+                        : syncStatus === 'error'
+                        ? 'Sync Error'
+                        : 'Local Mode'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                    <Clock className="w-3 h-3 text-slate-500" />
+                    <span>
+                      {lastSyncedAt
+                        ? `Synced ${new Date(lastSyncedAt).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}`
+                        : 'Not synced yet'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Immediate Sync Now Action */}
+                {supabaseConfig.isConfigured && isOnlineSyncEnabled && (
+                  <button
+                    type="button"
+                    onClick={handleManualSync}
+                    disabled={isManualSyncing || syncStatus === 'syncing'}
+                    className="w-full py-2.5 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 active:scale-[0.98] border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"
+                  >
+                    {isManualSyncing ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    )}
+                    <span>
+                      {isManualSyncing
+                        ? 'Synchronizing Cloud & Local Storage...'
+                        : 'Sync Now (Push & Pull)'}
+                    </span>
+                  </button>
+                )}
+              </div>
+
+              {/* Cloud Connection Configuration Badge */}
               <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-3.5 flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-2">
@@ -390,7 +522,7 @@ export const DataTransferModal: React.FC<DataTransferModalProps> = ({
                   <p className="text-[11px] text-slate-400 mt-0.5">
                     {supabaseConfig.isConfigured
                       ? `Configured via ${supabaseConfig.source === 'env' ? '.env file' : 'in-app settings'}`
-                      : 'Not yet configured (app is in local mode)'}
+                      : 'Not yet configured (enter credentials below)'}
                   </p>
                 </div>
 

@@ -83,3 +83,17 @@ create policy "Allow all actions on products" on public.products for all using (
 create policy "Allow all actions on warehouse_stocks" on public.warehouse_stocks for all using (true) with check (true);
 create policy "Allow all actions on audit_logs" on public.audit_logs for all using (true) with check (true);
 
+-- 6. Enable Realtime Publications
+-- Allows clients to receive live database changes instantly via WebSockets
+alter publication supabase_realtime add table public.warehouses;
+alter publication supabase_realtime add table public.categories;
+alter publication supabase_realtime add table public.products;
+alter publication supabase_realtime add table public.warehouse_stocks;
+alter publication supabase_realtime add table public.audit_logs;
+
+-- Set replica identity to full so update/delete events contain complete record payloads
+alter table public.warehouses replica identity full;
+alter table public.categories replica identity full;
+alter table public.products replica identity full;
+alter table public.warehouse_stocks replica identity full;
+alter table public.audit_logs replica identity full;

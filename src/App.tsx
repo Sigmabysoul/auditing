@@ -21,6 +21,7 @@ import { CategoryManagementModal } from './components/CategoryManagementModal';
 import { AuditHistoryView } from './components/AuditHistoryView';
 import { SettingsView } from './components/SettingsView';
 import { DataTransferModal } from './components/DataTransferModal';
+import { syncManager } from './services/syncManager';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
@@ -41,9 +42,10 @@ export function App() {
   const [isManagingCategories, setIsManagingCategories] = useState(false);
   const [isDataTransferOpen, setIsDataTransferOpen] = useState(false);
 
-  // Seed on initial mount
+  // Seed on initial mount & initialize realtime sync engine
   useEffect(() => {
     seedInitialDataIfNeeded().then(() => setDbInitialized(true));
+    syncManager.init();
   }, []);
 
   // Reactive Dexie queries with default empty array references
@@ -119,6 +121,7 @@ export function App() {
         await db.warehouseStocks.delete(s.id);
       }
     });
+    syncManager.schedulePush();
     setSelectedProductForDetail(null);
   };
 
@@ -160,7 +163,9 @@ export function App() {
               warehouses={warehouses}
               warehouseStocks={warehouseStocks}
               onClose={() => setActiveTab('dashboard')}
-              onRefresh={() => {}}
+              onRefresh={() => {
+                syncManager.schedulePush();
+              }}
             />
           </div>
         )}
@@ -170,7 +175,9 @@ export function App() {
             <CategoryManagementModal
               categories={categories}
               onClose={() => setActiveTab('dashboard')}
-              onRefresh={() => {}}
+              onRefresh={() => {
+                syncManager.schedulePush();
+              }}
             />
           </div>
         )}
@@ -213,7 +220,7 @@ export function App() {
           existingStock={auditTarget.stock}
           onClose={() => setAuditTarget(null)}
           onAuditSaved={() => {
-            // Keep detail modal updated reactively
+            syncManager.schedulePush();
           }}
         />
       )}
@@ -225,7 +232,9 @@ export function App() {
           categories={categories}
           warehouses={warehouses}
           onClose={() => setProductFormState({ isOpen: false })}
-          onSaved={() => {}}
+          onSaved={() => {
+            syncManager.schedulePush();
+          }}
           onOpenNewCategory={() => setIsManagingCategories(true)}
         />
       )}
@@ -236,7 +245,9 @@ export function App() {
           warehouses={warehouses}
           warehouseStocks={warehouseStocks}
           onClose={() => setIsManagingWarehouses(false)}
-          onRefresh={() => {}}
+          onRefresh={() => {
+            syncManager.schedulePush();
+          }}
         />
       )}
 
@@ -245,7 +256,9 @@ export function App() {
         <CategoryManagementModal
           categories={categories}
           onClose={() => setIsManagingCategories(false)}
-          onRefresh={() => {}}
+          onRefresh={() => {
+            syncManager.schedulePush();
+          }}
         />
       )}
 
