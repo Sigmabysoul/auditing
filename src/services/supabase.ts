@@ -10,14 +10,19 @@ export interface SupabaseConfig {
   source: 'env' | 'local' | 'none';
 }
 
+const DEFAULT_SUPABASE_URL = 'https://tceaeiehjwjczgzvrqzh.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'sb_publishable_M0xeaZCqtM2JG_aIeRn45w__Smc2XXy';
+
 export function getSupabaseConfig(): SupabaseConfig {
   const envUrl =
     import.meta.env.VITE_SUPABASE_URL ||
-    import.meta.env.NEXT_PUBLIC_SUPABASE_URL;
+    import.meta.env.NEXT_PUBLIC_SUPABASE_URL ||
+    DEFAULT_SUPABASE_URL;
   const envKey =
     import.meta.env.VITE_SUPABASE_ANON_KEY ||
     import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    DEFAULT_SUPABASE_KEY;
 
   if (envUrl && envKey && !envUrl.includes('your-project-id')) {
     return {
@@ -28,23 +33,11 @@ export function getSupabaseConfig(): SupabaseConfig {
     };
   }
 
-  const localUrl = localStorage.getItem(STORAGE_KEY_URL) || '';
-  const localKey = localStorage.getItem(STORAGE_KEY_ANON) || '';
-
-  if (localUrl && localKey) {
-    return {
-      url: localUrl,
-      anonKey: localKey,
-      isConfigured: true,
-      source: 'local',
-    };
-  }
-
   return {
-    url: '',
-    anonKey: '',
-    isConfigured: false,
-    source: 'none',
+    url: DEFAULT_SUPABASE_URL,
+    anonKey: DEFAULT_SUPABASE_KEY,
+    isConfigured: true,
+    source: 'env',
   };
 }
 

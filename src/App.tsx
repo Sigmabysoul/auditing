@@ -20,7 +20,7 @@ import { WarehouseManagementModal } from './components/WarehouseManagementModal'
 import { CategoryManagementModal } from './components/CategoryManagementModal';
 import { AuditHistoryView } from './components/AuditHistoryView';
 import { SettingsView } from './components/SettingsView';
-import { DataTransferModal } from './components/DataTransferModal';
+import { SyncModal } from './components/SyncModal';
 import { InstallAppModal } from './components/InstallAppModal';
 import { ThemeSelectorModal } from './components/ThemeSelectorModal';
 import { syncManager } from './services/syncManager';
@@ -45,7 +45,7 @@ export function App() {
   }>({ isOpen: false });
   const [isManagingWarehouses, setIsManagingWarehouses] = useState(false);
   const [isManagingCategories, setIsManagingCategories] = useState(false);
-  const [isDataTransferOpen, setIsDataTransferOpen] = useState(false);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
 
   // Seed on initial mount & initialize realtime sync engine
   useEffect(() => {
@@ -149,7 +149,7 @@ export function App() {
         onOpenNewProduct={() => setProductFormState({ isOpen: true })}
         onOpenNewWarehouse={() => setIsManagingWarehouses(true)}
         onOpenNewCategory={() => setIsManagingCategories(true)}
-        onOpenTransfer={() => setIsDataTransferOpen(true)}
+        onOpenSync={() => setIsSyncModalOpen(true)}
         onOpenInstallApp={() => setIsInstallAppOpen(true)}
         totalProductsCount={productsWithStock.length}
         warehouses={warehouses}
@@ -203,7 +203,6 @@ export function App() {
         {activeTab === 'settings' && (
           <SettingsView
             onDataChanged={() => {}}
-            onOpenTransfer={() => setIsDataTransferOpen(true)}
           />
         )}
       </main>
@@ -276,15 +275,14 @@ export function App() {
         />
       )}
 
-      {/* Data Transfer (Download / Upload) & Supabase Cloud Modal */}
-      {isDataTransferOpen && (
-        <DataTransferModal
-          onClose={() => setIsDataTransferOpen(false)}
-          onDataChanged={() => {}}
-          productsCount={productsWithStock.length}
-          warehousesCount={warehouses.length}
-        />
-      )}
+      {/* 1-Click Simple Cloud Sync Modal */}
+      <SyncModal
+        isOpen={isSyncModalOpen}
+        onClose={() => setIsSyncModalOpen(false)}
+        onDataChanged={() => {}}
+        productsCount={productsWithStock.length}
+        warehousesCount={warehouses.length}
+      />
 
       {/* Install App Modal */}
       <InstallAppModal

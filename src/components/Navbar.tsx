@@ -27,7 +27,7 @@ interface NavbarProps {
   onOpenNewProduct: () => void;
   onOpenNewWarehouse: () => void;
   onOpenNewCategory: () => void;
-  onOpenTransfer: () => void;
+  onOpenSync: () => void;
   onOpenInstallApp: () => void;
   totalProductsCount: number;
   warehouses: Warehouse[];
@@ -42,7 +42,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenNewProduct,
   onOpenNewWarehouse,
   onOpenNewCategory,
-  onOpenTransfer,
+  onOpenSync,
   onOpenInstallApp,
   totalProductsCount,
   warehouses,
@@ -90,7 +90,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   type="button"
                   onClick={() => {
                     triggerHaptic('light');
-                    onOpenTransfer();
+                    onOpenSync();
                   }}
                   className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border flex items-center gap-1.5 transition active:scale-95 ${
                     status === 'live'
@@ -105,7 +105,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
                       : 'bg-slate-800 light:bg-[#f3f0e8] text-slate-400 light:text-slate-600 border-slate-700 light:border-[#e7e2d4]'
                   }`}
-                  title="Click to open Cloud Sync & Transfer settings"
+                  title="Click to view Cloud Sync options"
                 >
                   {status === 'live' ? (
                     <>
@@ -255,18 +255,18 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>App</span>
             </button>
 
-            {/* Backup / Cloud Hub Button */}
+            {/* Cloud Sync Options Button */}
             <button
               type="button"
               onClick={() => {
                 triggerHaptic('light');
-                onOpenTransfer();
+                onOpenSync();
               }}
               className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800/90 light:bg-[#f3f0e8] hover:bg-slate-800 light:hover:bg-[#e9e4d7] text-slate-200 light:text-[#1c1917] border border-slate-700 light:border-[#e7e2d4] font-semibold text-xs transition active:scale-95"
-              title="Download, Upload or Supabase Hub"
+              title="Cloud Sync Options & History"
             >
               <ArrowDownUp className="w-3.5 h-3.5 text-blue-400 light:text-blue-600" />
-              <span>Backup</span>
+              <span>Cloud</span>
             </button>
 
             {/* Create Menu Button */}

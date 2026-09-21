@@ -19,10 +19,9 @@ import { useTheme } from '../context/ThemeContext';
 
 interface SettingsViewProps {
   onDataChanged: () => void;
-  onOpenTransfer?: () => void;
 }
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ onDataChanged, onOpenTransfer }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ onDataChanged }) => {
   const { theme, setIsThemeModalOpen } = useTheme();
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -174,14 +173,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onDataChanged, onOpe
         </button>
       </div>
 
-      {/* Backup & Restore Section */}
+      {/* Backup & Restore (File Download / Upload) */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 space-y-3 shadow-sm">
         <div className="flex items-center gap-2 text-xs font-bold text-white">
           <FileJson className="w-4 h-4 text-emerald-400" />
-          <span>Device Backup & Restore</span>
+          <span>Save Data File (Download & Upload)</span>
         </div>
         <p className="text-[11px] text-slate-400 leading-relaxed">
-          Create an instant JSON file of your entire inventory, warehouses, and audit logs to keep safe or send to your computer/email.
+          Need to switch to a new phone without cloud sync? Download your data file here, send it to your new phone (via WhatsApp or Email), and upload it there.
         </p>
 
         <div className="grid grid-cols-2 gap-2 pt-1">
@@ -192,7 +191,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onDataChanged, onOpe
             className="flex items-center justify-center gap-2 py-3 px-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-bold text-xs shadow-md shadow-emerald-500/20 transition disabled:opacity-50"
           >
             <Download className="w-4 h-4" />
-            <span>{isExporting ? 'Exporting...' : 'Export JSON'}</span>
+            <span>{isExporting ? 'Downloading...' : 'Download File'}</span>
           </button>
 
           <input
@@ -210,23 +209,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onDataChanged, onOpe
             className="flex items-center justify-center gap-2 py-3 px-3 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-semibold text-xs border border-slate-700 transition disabled:opacity-50"
           >
             <Upload className="w-4 h-4" />
-            <span>{isImporting ? 'Importing...' : 'Import Backup'}</span>
+            <span>{isImporting ? 'Uploading...' : 'Upload File'}</span>
           </button>
         </div>
-
-        {onOpenTransfer && (
-          <button
-            type="button"
-            onClick={() => {
-              triggerHaptic('light');
-              onOpenTransfer();
-            }}
-            className="w-full py-2.5 px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold text-xs flex items-center justify-center gap-2 transition active:scale-98"
-          >
-            <Smartphone className="w-4 h-4" />
-            <span>Open Phone-to-Phone Transfer & Supabase Hub →</span>
-          </button>
-        )}
       </div>
 
       {/* Sample Demo Data & Maintenance */}
